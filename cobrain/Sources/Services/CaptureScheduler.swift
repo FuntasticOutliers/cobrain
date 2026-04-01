@@ -111,6 +111,13 @@ final class CaptureScheduler {
         // Get window metadata (title + URL) via lightweight AX reads
         let meta = windowMetadata.metadata(for: context.pid, bundleID: context.bundleIdentifier)
 
+        // Skip private/incognito browser windows
+        if let title = meta.windowTitle,
+           WindowMetadataService.isPrivateBrowsing(title: title, bundleID: context.bundleIdentifier) {
+            log.debug("Skipping private browsing window: \(context.appName, privacy: .public)")
+            return
+        }
+
         // Screenshot the frontmost window
         let image: CGImage
         do {

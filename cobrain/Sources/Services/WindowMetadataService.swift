@@ -24,6 +24,26 @@ final class WindowMetadataService {
         "com.microsoft.edgemac",
     ]
 
+    // MARK: - Private Browsing Detection
+
+    /// Returns true if the window title indicates a private/incognito session.
+    static func isPrivateBrowsing(title: String, bundleID: String) -> Bool {
+        switch bundleID {
+        case "com.google.Chrome", "com.brave.Browser",
+             "company.thebrowser.Browser", "com.vivaldi.Vivaldi":
+            return title.hasSuffix("- Incognito")
+        case "com.apple.Safari":
+            return title.hasSuffix("- Private Browsing")
+                || title.hasSuffix("– Private Browsing")
+        case "org.mozilla.firefox":
+            return title.hasSuffix("(Private Browsing)")
+        case "com.microsoft.edgemac":
+            return title.hasSuffix("- InPrivate")
+        default:
+            return false
+        }
+    }
+
     // MARK: - Public
 
     /// Read window title and (for browsers) the URL.
