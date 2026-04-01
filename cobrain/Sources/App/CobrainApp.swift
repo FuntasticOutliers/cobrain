@@ -83,7 +83,10 @@ struct MenuBarView: View {
 
             Divider()
 
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            Button("Quit") {
+                    StorageManager.shared.checkpoint()
+                    NSApplication.shared.terminate(nil)
+                }
                 .keyboardShortcut("q", modifiers: [.command])
         }
         .onAppear {
