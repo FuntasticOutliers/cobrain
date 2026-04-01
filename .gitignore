@@ -23,3 +23,6 @@ build/
 
 # Sparkle signing key
 Sparkle/private-key
+
+# Internal planning docs
+internal/
