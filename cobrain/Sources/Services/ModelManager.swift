@@ -8,9 +8,6 @@ private let log = Logger(subsystem: "dev.cobrain.app", category: "model")
 
 /// Actor that runs VLM inference off the main thread.
 private actor InferenceRunner {
-    private var describeSession: ChatSession?
-    private weak var currentContainer: ModelContainer?
-
     func describe(
         container: ModelContainer,
         image: CGImage,
@@ -29,16 +26,13 @@ private actor InferenceRunner {
 
         let ciImage = CIImage(cgImage: image)
 
-        // Reuse the ChatSession if the container hasn't changed
-        if describeSession == nil || currentContainer !== container {
-            describeSession = ChatSession(
-                container,
-                generateParameters: GenerateParameters(maxTokens: 200, temperature: 0.3)
-            )
-            currentContainer = container
-        }
+        // Fresh session per capture to avoid accumulating context/KV cache
+        let session = ChatSession(
+            container,
+            generateParameters: GenerateParameters(maxTokens: 200, temperature: 0.3)
+        )
 
-        return try await describeSession!.respond(to: prompt, image: .ciImage(ciImage))
+        return try await session.respond(to: prompt, image: .ciImage(ciImage))
     }
 
     func complete(
@@ -56,8 +50,7 @@ private actor InferenceRunner {
     }
 
     func resetSession() {
-        describeSession = nil
-        currentContainer = nil
+        // no-op: sessions are now per-call
     }
 }
 
