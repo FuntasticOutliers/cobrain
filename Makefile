@@ -60,15 +60,20 @@ notarize:
 
 ## appcast: Generate appcast.xml into docs/ for GitHub Pages
 appcast:
-	$(eval SPARKLE_BIN := $(shell find ~/Library/Developer/Xcode/DerivedData -path '*/Sparkle/generate_appcast' -type f 2>/dev/null | head -1))
+	$(eval SPARKLE_BIN := $(shell \
+		find Tuist/.build -path '*/Sparkle/bin/generate_appcast' -type f 2>/dev/null | head -1 || true; \
+	))
+	$(eval SPARKLE_BIN := $(if $(SPARKLE_BIN),$(SPARKLE_BIN),$(shell \
+		find ~/Library/Developer/Xcode/DerivedData -path '*/Sparkle/generate_appcast' -type f 2>/dev/null | head -1 || true; \
+	)))
 	@if [ -z "$(SPARKLE_BIN)" ]; then \
-		echo "Error: generate_appcast not found. Build the project first so Sparkle is in DerivedData."; \
+		echo "Error: generate_appcast not found. Run 'tuist install' or build the project first."; \
 		exit 1; \
 	fi
 	mkdir -p $(APPCAST_DIR)
 	cp $(DMG_PATH) $(APPCAST_DIR)/
 	$(SPARKLE_BIN) \
-		--download-url-prefix "https://github.com/WeAreOutliers/cobrain/releases/download/v$(VERSION)/" \
+		--download-url-prefix "https://github.com/FuntasticOutliers/cobrain/releases/download/v$(VERSION)/" \
 		$(APPCAST_DIR)
 
 ## bump: Increment patch version in Project.swift

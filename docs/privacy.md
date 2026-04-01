@@ -99,4 +99,4 @@ You have full control over Cobrain's behavior:
 
 ## Open Source
 
-Cobrain's source code is publicly available at [github.com/WeAreOutliers/cobrain](https://github.com/WeAreOutliers/cobrain). You can audit exactly what the app does.
+Cobrain's source code is publicly available at [github.com/FuntasticOutliers/cobrain](https://github.com/FuntasticOutliers/cobrain). You can audit exactly what the app does.

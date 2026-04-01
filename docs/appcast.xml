@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>cobrain</title>
+        <item>
+            <title>0.1.1</title>
+            <pubDate>Thu, 02 Apr 2026 01:02:21 +0530</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/FuntasticOutliers/cobrain/releases/download/v0.1.1/cobrain.dmg" length="16039209" type="application/octet-stream"/>
+        </item>
+    </channel>
+</rss>

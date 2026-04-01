@@ -11,7 +11,7 @@ let project = Project(
             deploymentTargets: .macOS("14.0"),
             infoPlist: .extendingDefault(with: [
                 "CFBundleIconFile": "AppIcon",
-                "CFBundleShortVersionString": "0.1.0",
+                "CFBundleShortVersionString": "0.1.1",
                 "CFBundleVersion": "1",
                 "NSScreenCaptureUsageDescription": "Cobrain captures a screenshot of your active window to understand what you're working on and to enable replay. Screenshots are stored locally on your Mac.",
                 "SUFeedURL": "https://weareoutliers.github.io/cobrain/appcast.xml",

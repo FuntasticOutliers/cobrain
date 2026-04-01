@@ -81,7 +81,7 @@ brew install --cask cobrain
 ```
 
 ### Manual
-Download the latest DMG from [GitHub Releases](https://github.com/WeAreOutliers/cobrain/releases), open it, and drag Cobrain to Applications.
+Download the latest DMG from [GitHub Releases](https://github.com/FuntasticOutliers/cobrain/releases), open it, and drag Cobrain to Applications.
 
 ---
 
@@ -277,6 +277,6 @@ See [LICENSE](../LICENSE) for details.
 
 ## Links
 
-- [GitHub](https://github.com/WeAreOutliers/cobrain)
-- [Releases](https://github.com/WeAreOutliers/cobrain/releases)
-- [Homebrew Cask](https://github.com/WeAreOutliers/cobrain/tree/main/Casks)
+- [GitHub](https://github.com/FuntasticOutliers/cobrain)
+- [Releases](https://github.com/FuntasticOutliers/cobrain/releases)
+- [Homebrew Cask](https://github.com/FuntasticOutliers/cobrain/tree/main/Casks)
