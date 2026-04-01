@@ -59,27 +59,47 @@ private actor InferenceRunner {
 final class ModelManager {
     static let shared = ModelManager()
 
+    struct BatchProgress: Equatable {
+        let current: Int
+        let total: Int
+        let phase: Phase
+
+        enum Phase: Equatable {
+            case describing
+            case summarizing
+        }
+    }
+
     enum Status: Equatable {
         case idle
         case downloading(Double)
         case loading
         case ready
-        case inferring
+        case inferring(BatchProgress?)  // nil = interactive (chat)
         case error(String)
     }
 
     private(set) var status: Status = .idle
     private(set) var container: ModelContainer?
     private(set) var loadedModelID: String?
+    private(set) var pendingCount: Int = 0
 
     private let inference = InferenceRunner()
 
-    var isReady: Bool { status == .ready || status == .inferring }
+    /// Refresh the pending capture count from the database.
+    func refreshPendingCount() {
+        pendingCount = (try? StorageManager.shared.pendingCaptureCount()) ?? 0
+    }
+
+    var isReady: Bool {
+        if case .inferring = status { return true }
+        return status == .ready
+    }
 
     /// Ensures the model is loaded and ready. Loads on demand if idle.
     func ensureReady() async {
         switch status {
-        case .ready, .inferring:
+        case .ready, .inferring(_):
             return
         case .downloading, .loading:
             await waitUntilLoaded()
@@ -142,8 +162,12 @@ final class ModelManager {
         url: String?
     ) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
-        status = .inferring
-        defer { if status == .inferring { status = .ready } }
+        if case .inferring(let p) = status, p != nil {
+            // Preserve batch progress set by coordinator
+        } else {
+            status = .inferring(nil)
+        }
+        defer { if case .inferring = status { status = .ready } }
         return try await inference.describe(
             container: container,
             image: image,
@@ -156,8 +180,12 @@ final class ModelManager {
     /// Generate a single text completion. Runs inference off the main thread.
     func complete(system: String, user: String, maxTokens: Int = 256) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
-        status = .inferring
-        defer { if status == .inferring { status = .ready } }
+        if case .inferring(let p) = status, p != nil {
+            // Preserve batch progress set by coordinator
+        } else {
+            status = .inferring(nil)
+        }
+        defer { if case .inferring = status { status = .ready } }
         return try await inference.complete(
             container: container,
             system: system,
@@ -169,7 +197,7 @@ final class ModelManager {
     /// Stream a text response. Used for chat.
     func stream(system: String, user: String, maxTokens: Int = 512) throws -> AsyncThrowingStream<String, Error> {
         guard let container else { throw ModelError.notLoaded }
-        status = .inferring
+        status = .inferring(nil)
 
         let session = ChatSession(
             container,
@@ -181,7 +209,12 @@ final class ModelManager {
 
     /// Called when streaming completes to transition back from .inferring.
     func streamDidFinish() {
-        if status == .inferring { status = .ready }
+        if case .inferring = status { status = .ready }
+    }
+
+    /// Update batch progress (called by BatchInferenceCoordinator).
+    func setBatchProgress(_ progress: BatchProgress) {
+        status = .inferring(progress)
     }
 
     /// Wait for an in-progress load to complete.
@@ -190,7 +223,7 @@ final class ModelManager {
         for _ in 0..<600 { // up to ~60 seconds
             try? await Task.sleep(for: .milliseconds(100))
             switch status {
-            case .ready, .inferring: return
+            case .ready, .inferring(_): return
             case .error, .idle: return
             case .downloading, .loading: continue
             }

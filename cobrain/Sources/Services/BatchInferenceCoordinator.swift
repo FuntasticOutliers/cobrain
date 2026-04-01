@@ -57,7 +57,8 @@ final class BatchInferenceCoordinator {
             return
         }
 
-        log.info("Processing batch of \(pending.count) pending captures")
+        let total = pending.count
+        log.info("Processing batch of \(total) pending captures")
 
         // Load model
         await ModelManager.shared.ensureReady()
@@ -70,8 +71,13 @@ final class BatchInferenceCoordinator {
         let storage = StorageManager.shared
         var processed = 0
 
-        for capture in pending {
+        for (index, capture) in pending.enumerated() {
             guard let id = capture.id else { continue }
+
+            // Report progress
+            ModelManager.shared.setBatchProgress(.init(
+                current: index + 1, total: total, phase: .describing
+            ))
 
             // Load image from disk
             let imageURL = StorageManager.screenshotURL(for: capture.imagePath)
@@ -133,6 +139,7 @@ final class BatchInferenceCoordinator {
             // Remove from pending queue
             try? storage.deletePendingCapture(id: id)
             processed += 1
+            ModelManager.shared.refreshPendingCount()
         }
 
         log.info("Batch complete: \(processed)/\(pending.count) captures processed")

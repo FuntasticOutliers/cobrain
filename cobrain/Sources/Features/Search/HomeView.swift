@@ -230,7 +230,19 @@ struct HomeView: View {
         let status = ModelManager.shared.status
         switch status {
         case .idle:
-            EmptyView()
+            let pending = ModelManager.shared.pendingCount
+            if pending > 0 {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text("·")
+                        .foregroundStyle(DS.Colors.textSecondary)
+                    Image(systemName: "clock")
+                        .font(.system(size: 10))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                    Text("\(pending) pending")
+                        .font(.system(size: 11))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
+            }
         case .downloading(let progress):
             HStack(spacing: DS.Spacing.xs) {
                 Text("·")
@@ -261,7 +273,7 @@ struct HomeView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.green)
             }
-        case .inferring:
+        case .inferring(let progress):
             HStack(spacing: DS.Spacing.xs) {
                 Text("·")
                     .foregroundStyle(DS.Colors.textSecondary)
@@ -269,9 +281,17 @@ struct HomeView: View {
                     .font(.system(size: 10))
                     .foregroundStyle(DS.Colors.accent)
                     .symbolEffect(.pulse)
-                Text("Thinking…")
-                    .font(.system(size: 11))
-                    .foregroundStyle(DS.Colors.textSecondary)
+                if let progress {
+                    Text(progress.phase == .describing
+                         ? "Describing \(progress.current)/\(progress.total)"
+                         : "Summarizing \(progress.current)/\(progress.total)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                } else {
+                    Text("Inferring…")
+                        .font(.system(size: 11))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
             }
         case .error:
             HStack(spacing: DS.Spacing.xs) {

@@ -29,10 +29,17 @@ final class SummaryService: Sendable {
             let fragments = try StorageManager.shared.unsummarizedFragments(limit: 20)
             guard !fragments.isEmpty else { return }
 
-            log.info("Summarizing \(fragments.count, privacy: .public) fragments")
+            let total = fragments.count
+            log.info("Summarizing \(total, privacy: .public) fragments")
 
             // Process summaries concurrently in batches of 4
+            var done = 0
             for batch in fragments.chunked(into: 4) {
+                await MainActor.run {
+                    ModelManager.shared.setBatchProgress(.init(
+                        current: done + 1, total: total, phase: .summarizing
+                    ))
+                }
                 await withTaskGroup(of: Void.self) { group in
                     for fragment in batch {
                         group.addTask {
@@ -40,6 +47,7 @@ final class SummaryService: Sendable {
                         }
                     }
                 }
+                done += batch.count
             }
         } catch {
             log.error("Failed to fetch unsummarized: \(error.localizedDescription, privacy: .public)")

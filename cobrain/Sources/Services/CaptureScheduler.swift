@@ -165,6 +165,7 @@ final class CaptureScheduler {
         )
 
         log.info("Queued pending capture from \(context.appName, privacy: .public), window: \(meta.windowTitle ?? "nil", privacy: .public)")
+        await ModelManager.shared.refreshPendingCount()
     }
 
     // MARK: - System Events

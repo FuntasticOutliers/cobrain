@@ -19,6 +19,7 @@ struct CobrainApp: App {
                     if settings.hasCompletedOnboarding {
                         CaptureScheduler.shared.start()
                         BatchInferenceCoordinator.shared.start()
+                        ModelManager.shared.refreshPendingCount()
                     }
                 }
         }

@@ -60,7 +60,10 @@ struct SettingsView: View {
                             Spacer()
                             Picker("", selection: Binding(
                                 get: { settings.modelID },
-                                set: { settings.modelID = $0 }
+                                set: {
+                                    settings.modelID = $0
+                                    Task { await ModelManager.shared.reloadModel() }
+                                }
                             )) {
                                 ForEach(SupportedModel.grouped, id: \.category) { group in
                                     Section(group.category) {
@@ -82,9 +85,20 @@ struct SettingsView: View {
                             modelStatusView
                         }
 
-                        if settings.modelID != ModelManager.shared.loadedModelID {
-                            Button("Reload Model") {
-                                Task { await ModelManager.shared.reloadModel() }
+                        HStack {
+                            Text("Queue")
+                                .font(DS.Fonts.body)
+                                .foregroundStyle(DS.Colors.text)
+                            Spacer()
+                            Text("\(ModelManager.shared.pendingCount) pending")
+                                .font(DS.Fonts.mono)
+                                .foregroundStyle(DS.Colors.textSecondary)
+                        }
+
+                        if ModelManager.shared.pendingCount > 0,
+                           ModelManager.shared.status == .idle || ModelManager.shared.status == .ready {
+                            Button("Process Queue") {
+                                Task { await BatchInferenceCoordinator.shared.flushNow() }
                             }
                             .font(DS.Fonts.body)
                         }
@@ -258,10 +272,18 @@ struct SettingsView: View {
             Text("Ready")
                 .font(DS.Fonts.mono)
                 .foregroundStyle(DS.Colors.success)
-        case .inferring:
-            Text("Inferring…")
-                .font(DS.Fonts.mono)
-                .foregroundStyle(DS.Colors.accent)
+        case .inferring(let progress):
+            if let progress {
+                Text(progress.phase == .describing
+                     ? "Describing \(progress.current)/\(progress.total)"
+                     : "Summarizing \(progress.current)/\(progress.total)")
+                    .font(DS.Fonts.mono)
+                    .foregroundStyle(DS.Colors.accent)
+            } else {
+                Text("Inferring…")
+                    .font(DS.Fonts.mono)
+                    .foregroundStyle(DS.Colors.accent)
+            }
         case .error(let msg):
             Text(msg)
                 .font(DS.Fonts.mono)
