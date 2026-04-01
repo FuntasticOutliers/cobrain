@@ -126,7 +126,7 @@ final class AppSettings {
         self.captureIntervalSeconds = interval > 0 ? interval : 5
         let retention = UserDefaults.standard.integer(forKey: "retentionDays")
         self.retentionDays = retention > 0 ? retention : 90
-        self.theme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "") ?? .system
+        self.theme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "") ?? .light
         self.modelID = UserDefaults.standard.string(forKey: "modelID")
             ?? SupportedModel.qwen3VL4B.rawValue
         let threshold = UserDefaults.standard.double(forKey: "changeDetectionThreshold")
