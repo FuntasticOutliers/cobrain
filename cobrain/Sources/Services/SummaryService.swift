@@ -3,38 +3,55 @@ import os
 
 private let log = Logger(subsystem: "dev.cobrain.app", category: "summary")
 
-@MainActor
-final class SummaryService {
+final class SummaryService: Sendable {
     static let shared = SummaryService()
 
-    private var task: Task<Void, Never>?
-    private var isRunning = false
+    // Use an actor to protect mutable state instead of @MainActor
+    private let state = SummaryState()
+
+    private actor SummaryState {
+        var task: Task<Void, Never>?
+        var isRunning = false
+
+        func setTask(_ t: Task<Void, Never>?) { task = t }
+        func getTask() -> Task<Void, Never>? { task }
+        func startRunning() -> Bool {
+            guard !isRunning else { return false }
+            isRunning = true
+            return true
+        }
+        func stopRunning() { isRunning = false }
+    }
 
     func start() {
-        guard task == nil else { return }
-        log.info("Starting summary service (120s interval)")
+        Task {
+            guard await state.getTask() == nil else { return }
+            log.info("Starting summary service (120s interval)")
 
-        task = Task { [weak self] in
-            // Initial delay
-            try? await Task.sleep(for: .seconds(10))
+            let t = Task.detached { [weak self] in
+                try? await Task.sleep(for: .seconds(10))
 
-            while !Task.isCancelled {
-                await self?.processUnsummarized()
-                try? await Task.sleep(for: .seconds(120))
+                while !Task.isCancelled {
+                    await self?.processUnsummarized()
+                    try? await Task.sleep(for: .seconds(120))
+                }
             }
+            await state.setTask(t)
         }
     }
 
     func stop() {
-        task?.cancel()
-        task = nil
+        Task {
+            await state.getTask()?.cancel()
+            await state.setTask(nil)
+        }
     }
 
     private func processUnsummarized() async {
-        guard !isRunning else { return }
-        guard ModelManager.shared.isReady else { return }
-        isRunning = true
-        defer { isRunning = false }
+        guard await state.startRunning() else { return }
+        defer { Task { await state.stopRunning() } }
+
+        guard await ModelManager.shared.isReady else { return }
 
         do {
             let fragments = try StorageManager.shared.unsummarizedFragments(limit: 20)
@@ -42,36 +59,55 @@ final class SummaryService {
 
             log.info("Summarizing \(fragments.count, privacy: .public) fragments")
 
-            for fragment in fragments {
+            // Process summaries concurrently in batches of 4
+            for batch in fragments.chunked(into: 4) {
                 guard !Task.isCancelled else { break }
 
-                let contentPreview = String(fragment.content.prefix(1500))
-                let prompt = """
-                Summarize this text captured from \(fragment.appName)\
-                \(fragment.windowTitle.map { " (\($0))" } ?? ""). \
-                Be concise — 1-2 sentences. Just the summary, nothing else.
-
-                Text:
-                \(contentPreview)
-                """
-
-                do {
-                    let summary = try await ModelManager.shared.complete(
-                        system: "You are a concise summarizer. Output only the summary, no preamble.",
-                        user: prompt,
-                        maxTokens: 100
-                    )
-
-                    if !summary.isEmpty, let id = fragment.id {
-                        try StorageManager.shared.updateFragmentSummary(id: id, summary: summary)
-                        log.info("Summarized fragment #\(id, privacy: .public): \(summary.prefix(80), privacy: .public)")
+                await withTaskGroup(of: Void.self) { group in
+                    for fragment in batch {
+                        group.addTask {
+                            await self.summarize(fragment)
+                        }
                     }
-                } catch {
-                    log.error("Summary failed for #\(fragment.id ?? -1, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
         } catch {
             log.error("Failed to fetch unsummarized: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func summarize(_ fragment: Fragment) async {
+        let contentPreview = String(fragment.content.prefix(1500))
+        let prompt = """
+        Summarize this text captured from \(fragment.appName)\
+        \(fragment.windowTitle.map { " (\($0))" } ?? ""). \
+        Be concise — 1-2 sentences. Just the summary, nothing else.
+
+        Text:
+        \(contentPreview)
+        """
+
+        do {
+            let summary = try await ModelManager.shared.complete(
+                system: "You are a concise summarizer. Output only the summary, no preamble.",
+                user: prompt,
+                maxTokens: 100
+            )
+
+            if !summary.isEmpty, let id = fragment.id {
+                try StorageManager.shared.updateFragmentSummary(id: id, summary: summary)
+                log.info("Summarized fragment #\(id, privacy: .public): \(summary.prefix(80), privacy: .public)")
+            }
+        } catch {
+            log.error("Summary failed for #\(fragment.id ?? -1, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+}
+
+private extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
         }
     }
 }

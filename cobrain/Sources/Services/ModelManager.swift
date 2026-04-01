@@ -6,6 +6,61 @@ import os
 
 private let log = Logger(subsystem: "dev.cobrain.app", category: "model")
 
+/// Actor that runs VLM inference off the main thread.
+private actor InferenceRunner {
+    private var describeSession: ChatSession?
+    private weak var currentContainer: ModelContainer?
+
+    func describe(
+        container: ModelContainer,
+        image: CGImage,
+        appName: String,
+        windowTitle: String?,
+        url: String?
+    ) async throws -> String {
+        var context = appName
+        if let title = windowTitle { context += " — \(title)" }
+        if let url { context += " (\(url))" }
+
+        let prompt = """
+        Describe what the user is doing in this screenshot from \(context). \
+        Be concise — 2-3 sentences. Focus on the activity and content, not UI chrome.
+        """
+
+        let ciImage = CIImage(cgImage: image)
+
+        // Reuse the ChatSession if the container hasn't changed
+        if describeSession == nil || currentContainer !== container {
+            describeSession = ChatSession(
+                container,
+                generateParameters: GenerateParameters(maxTokens: 200, temperature: 0.3)
+            )
+            currentContainer = container
+        }
+
+        return try await describeSession!.respond(to: prompt, image: .ciImage(ciImage))
+    }
+
+    func complete(
+        container: ModelContainer,
+        system: String,
+        user: String,
+        maxTokens: Int
+    ) async throws -> String {
+        let session = ChatSession(
+            container,
+            instructions: system,
+            generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0.3)
+        )
+        return try await session.respond(to: user)
+    }
+
+    func resetSession() {
+        describeSession = nil
+        currentContainer = nil
+    }
+}
+
 @Observable
 @MainActor
 final class ModelManager {
@@ -22,6 +77,8 @@ final class ModelManager {
     private(set) var status: Status = .idle
     private(set) var container: ModelContainer?
     private(set) var loadedModelID: String?
+
+    private let inference = InferenceRunner()
 
     var isReady: Bool { status == .ready }
 
@@ -60,10 +117,11 @@ final class ModelManager {
         container = nil
         loadedModelID = nil
         status = .idle
+        await inference.resetSession()
         await loadModel()
     }
 
-    /// Describe a screenshot using the VLM. Returns a natural-language description.
+    /// Describe a screenshot using the VLM. Runs inference off the main thread.
     func describe(
         image: CGImage,
         appName: String,
@@ -71,35 +129,24 @@ final class ModelManager {
         url: String?
     ) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
-
-        var context = appName
-        if let title = windowTitle { context += " — \(title)" }
-        if let url { context += " (\(url))" }
-
-        let prompt = """
-        Describe what the user is doing in this screenshot from \(context). \
-        Be concise — 2-3 sentences. Focus on the activity and content, not UI chrome.
-        """
-
-        let ciImage = CIImage(cgImage: image)
-
-        let session = ChatSession(
-            container,
-            generateParameters: GenerateParameters(maxTokens: 200, temperature: 0.3)
+        return try await inference.describe(
+            container: container,
+            image: image,
+            appName: appName,
+            windowTitle: windowTitle,
+            url: url
         )
-        return try await session.respond(to: prompt, image: .ciImage(ciImage))
     }
 
-    /// Generate a single text completion. Used for summaries of older fragments.
+    /// Generate a single text completion. Runs inference off the main thread.
     func complete(system: String, user: String, maxTokens: Int = 256) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
-
-        let session = ChatSession(
-            container,
-            instructions: system,
-            generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0.3)
+        return try await inference.complete(
+            container: container,
+            system: system,
+            user: user,
+            maxTokens: maxTokens
         )
-        return try await session.respond(to: user)
     }
 
     /// Stream a text response. Used for chat.

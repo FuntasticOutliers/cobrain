@@ -38,10 +38,10 @@ final class ScreenCaptureService: Sendable {
         let config = SCStreamConfiguration()
         config.scalesToFit = false
         config.showsCursor = false
-        config.captureResolution = .automatic
-        // Use 2x scale for Retina-quality OCR
-        config.width = Int(window.frame.width) * 2
-        config.height = Int(window.frame.height) * 2
+        config.captureResolution = .nominal
+        // Capture at 1x — VLM only needs 1024px max, no benefit from Retina
+        config.width = Int(window.frame.width)
+        config.height = Int(window.frame.height)
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
         log.debug("Captured window screenshot: \(image.width)x\(image.height)")
