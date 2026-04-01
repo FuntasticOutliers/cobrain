@@ -8,7 +8,7 @@ final class DeduplicationService {
     static let shared = DeduplicationService()
 
     private var recentHashes: [(hash: String, bundleID: String, windowTitle: String?)] = []
-    private let cacheSize = 50
+    private let cacheSize = 200
 
     enum Result {
         case newFragment
