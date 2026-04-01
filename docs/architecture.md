@@ -14,9 +14,9 @@ Cobrain is a macOS SwiftUI application that runs as both a menu bar app and a wi
 │              Window Scene + MenuBarExtra Scene              │
 ├─────────────────────────────────────────────────────────────┤
 │                        MainView                             │
-│   ┌──────┬──────────┬──────┬────────┬──────────┐           │
-│   │ Home │ Timeline │ Chat │ Browse │ Settings │           │
-│   └──────┴──────────┴──────┴────────┴──────────┘           │
+│   ┌──────┬──────────┬────────┬──────┬────────┬──────────┐   │
+│   │ Home │ Timeline │ Replay │ Chat │ Browse │ Settings │   │
+│   └──────┴──────────┴────────┴──────┴────────┴──────────┘   │
 ├─────────────────────────────────────────────────────────────┤
 │                    Service Layer                             │
 │  CaptureScheduler (orchestrator)                            │
@@ -59,7 +59,8 @@ cobrain/Sources/
 └── Features/
     ├── Search/       # HomeView (landing) + SearchResultsView
     ├── Chat/         # ChatView + ChatViewModel (RAG chat)
-    ├── Timeline/     # TimelineView (day-based chronological)
+    ├── Timeline/     # TimelineView (day-based chronological, thumbnail previews)
+    ├── Replay/       # ReplayView (screenshot slideshow playback)
     ├── Browser/      # BrowserView + BrowserViewModel (app-centric)
     ├── Settings/     # SettingsView (all preferences)
     └── Onboarding/   # OnboardingView (permissions setup)
@@ -78,7 +79,7 @@ The central coordinator. Runs on a `DispatchSourceTimer` (utility QoS) and orche
 3. Capture screenshot via ScreenCaptureService
 4. Read metadata via WindowMetadataService
 5. Run change detection against previous capture
-6. If changed: downsample, describe via ModelManager, dedup, save to StorageManager
+6. If changed: save screenshot to disk as JPEG, downsample, describe via ModelManager, dedup, save fragment + image path to StorageManager
 7. If unchanged: exponential backoff (5s → 10s → 20s → 30s max)
 
 Listens for system events:
@@ -130,12 +131,14 @@ Manages the on-device VLM lifecycle (MLXVLM):
 ### StorageManager
 
 GRDB.swift wrapper for SQLite with FTS5 full-text search:
-- **Location:** `~/Library/Application Support/cobrain/brain.sqlite`
+- **Database:** `~/Library/Application Support/cobrain/brain.sqlite`
+- **Screenshots:** `~/Library/Application Support/cobrain/screenshots/{YYYY-MM-DD}/{timestamp}.jpg`
 - **WAL mode**, NORMAL synchronous, 5s busy timeout
 - **FTS5 virtual table** with Porter stemming + Unicode tokenization
 - Auto-synced via SQL triggers on insert/update/delete
 - BM25 ranking for search results with snippet extraction
-- Handles retention-based purging and data deletion
+- `saveScreenshot()` writes CGImage as JPEG (70% quality) organized by day
+- Handles retention-based purging of both database fragments and screenshot files
 
 ### SummaryService
 
@@ -177,7 +180,10 @@ ModelManager.describe() ──→ text description
 DeduplicationService ──→ SHA256 check
     │
     ▼
-StorageManager.saveFragment() ──→ SQLite + FTS5 index
+StorageManager.saveScreenshot() ──→ JPEG to disk
+    │
+    ▼
+StorageManager.saveFragment() ──→ SQLite + FTS5 index (with imagePath)
 ```
 
 ### Chat Context Building
@@ -223,7 +229,8 @@ CREATE TABLE fragments (
     capturedAt INTEGER NOT NULL,
     day TEXT NOT NULL,
     wordCount INTEGER DEFAULT 0,
-    summary TEXT
+    summary TEXT,
+    imagePath TEXT
 );
 
 -- Indexes

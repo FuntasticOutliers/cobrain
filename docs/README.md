@@ -12,10 +12,9 @@ Think of it as a personal search engine for everything you've done on your compu
 
 1. **Capture** — Every few seconds, Cobrain screenshots the frontmost window and reads its title and URL.
 2. **Understand** — An on-device vision language model (VLM) generates a 2–3 sentence description of what's on screen.
-3. **Store** — The description, app name, window title, URL, and timestamp are saved to a local SQLite database with full-text search.
-4. **Discard the image** — The screenshot is never saved. Only the text description is kept.
+3. **Store** — The description, app name, window title, URL, timestamp, and screenshot are saved locally. Text goes into a SQLite database with full-text search; screenshots are saved as JPEGs organized by day.
 
-You can then search, browse, chat with, or timeline-view your captured history.
+You can then search, browse, chat with, replay, or timeline-view your captured history.
 
 ---
 
@@ -33,7 +32,17 @@ Ask natural-language questions about your activity. Cobrain retrieves relevant f
 - "Summarize my browsing from this morning"
 
 ### Timeline
-Browse your day chronologically. Fragments are grouped into time blocks (morning, afternoon, evening, night) with app icons and summaries. Navigate between days.
+Browse your day chronologically. Fragments are grouped into time blocks (morning, afternoon, evening, night) with app icons and summaries. Expand any entry to see its saved screenshot thumbnail. Navigate between days.
+
+### Replay
+Play back your day as a visual slideshow of saved screenshots. Controls include:
+- **Play/Pause** with automatic advancement
+- **Frame-by-frame** stepping (forward/back)
+- **Scrub slider** to jump to any point in the day
+- **Speed control** (0.5x, 1x, 2x, 4x)
+- **Metadata overlay** showing the app name, window title, and timestamp for each frame
+
+Navigate between days to replay any day in your history.
 
 ### Browse
 Explore captured content organized by application. See which apps you've used most, with fragment counts and day-based grouping.
@@ -48,8 +57,8 @@ Quick access from the menu bar. See capture status (active/paused), today's frag
 Cobrain is built privacy-first:
 
 - **100% on-device** — The AI model runs locally on your Mac. No data is sent to any server.
-- **No screenshots saved** — Images are processed in memory and discarded. Only text descriptions are stored.
-- **Local database** — All data lives in `~/Library/Application Support/cobrain/brain.sqlite`.
+- **Screenshots saved locally** — Screenshots are stored as JPEG files on your Mac at `~/Library/Application Support/cobrain/screenshots/`, organized by day. They never leave your device.
+- **Local database** — All text data lives in `~/Library/Application Support/cobrain/brain.sqlite`.
 - **App exclusions** — Sensitive apps (1Password, Keychain Access) are excluded by default. Add any app you want.
 - **Data retention** — Configure how long data is kept (30–365 days, default 90). Delete everything instantly from Settings.
 - **Unsandboxed for a reason** — The app needs Accessibility API access to read window titles and browser URLs. It does not read text content from apps.
@@ -149,7 +158,8 @@ Timer fires (every 5–30s, adaptive)
   → If <5% change: back off timer, skip
   → If changed: downsample to 1024px, run VLM
   → Check deduplication (SHA256 hash)
-  → Save fragment to SQLite + FTS5 index
+  → Save screenshot to disk as JPEG (70% quality, organized by day)
+  → Save fragment + image path to SQLite + FTS5 index
 ```
 
 ### Adaptive Scheduling
@@ -177,6 +187,7 @@ Each captured moment is stored as a **Fragment**:
 | `capturedAt` | Unix timestamp |
 | `day` | Date string (YYYY-MM-DD) for grouping |
 | `summary` | 1–2 sentence summary (generated asynchronously) |
+| `imagePath` | Relative path to the saved screenshot JPEG (e.g., `2026-04-01/1711929600.jpg`) |
 
 Fragments are indexed with SQLite FTS5 using Porter stemming and Unicode tokenization for fast, typo-tolerant search.
 
@@ -208,8 +219,9 @@ Cobrain automatically categorizes apps:
 ## Storage
 
 - **Database location:** `~/Library/Application Support/cobrain/brain.sqlite`
-- **Format:** SQLite with WAL mode for concurrent reads/writes
-- **Auto-cleanup:** Fragments older than the retention period are purged automatically
+- **Screenshots location:** `~/Library/Application Support/cobrain/screenshots/{YYYY-MM-DD}/`
+- **Format:** SQLite with WAL mode for concurrent reads/writes; screenshots as JPEG (~100–300 KB each)
+- **Auto-cleanup:** Fragments and their associated screenshots older than the retention period are purged automatically
 - **Manual cleanup:** Delete all data from Settings
 
 ---

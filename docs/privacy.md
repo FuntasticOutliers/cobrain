@@ -10,13 +10,12 @@ Cobrain is designed with privacy as a core principle. Your data never leaves you
 
 When capture is enabled, Cobrain periodically:
 
-1. **Screenshots the frontmost window** — Using macOS ScreenCaptureKit. The screenshot is processed in memory and immediately discarded. It is never saved to disk.
+1. **Screenshots the frontmost window** — Using macOS ScreenCaptureKit. The screenshot is saved locally as a JPEG file on your Mac for replay functionality.
 2. **Reads window metadata** — Using the Accessibility API, Cobrain reads the window title and browser URL of the frontmost app. It does not read text content from within apps.
 3. **Generates a text description** — An on-device AI model (running entirely on your Mac) describes what was visible in the screenshot in 2–3 sentences.
-4. **Stores the description** — The text description, along with the app name, window title, URL, and timestamp, is saved to a local SQLite database.
+4. **Stores the description and screenshot** — The text description, along with the app name, window title, URL, and timestamp, is saved to a local SQLite database. The screenshot is saved as a JPEG file in `~/Library/Application Support/cobrain/screenshots/`.
 
 **What is NOT captured or stored:**
-- Screenshots or images of any kind
 - Text content from within applications (clipboard, document text, etc.)
 - Keystrokes or input
 - Audio or video
@@ -26,13 +25,14 @@ When capture is enabled, Cobrain periodically:
 
 ## Where Data Is Stored
 
-All data is stored locally in:
+All data is stored locally on your Mac:
 
 ```
-~/Library/Application Support/cobrain/brain.sqlite
+~/Library/Application Support/cobrain/brain.sqlite          # Text data (SQLite)
+~/Library/Application Support/cobrain/screenshots/           # Screenshot JPEGs
 ```
 
-This is a standard SQLite database on your Mac's filesystem. No data is stored in the cloud, synced to external services, or transmitted over the network.
+Screenshots are organized by date (`screenshots/2026-04-01/1711929600.jpg`). No data is stored in the cloud, synced to external services, or transmitted over the network.
 
 ---
 
@@ -80,7 +80,7 @@ You can add or remove app exclusions in Settings. When an app is excluded, Cobra
 - **Default retention:** 90 days
 - **Configurable:** 30, 60, 90, 180, or 365 days
 - **Manual deletion:** You can delete all captured data instantly from Settings
-- **Automatic cleanup:** Fragments older than the retention period are purged automatically
+- **Automatic cleanup:** Fragments and their associated screenshots older than the retention period are purged automatically
 
 ---
 
@@ -93,7 +93,7 @@ You have full control over Cobrain's behavior:
 - **Adjust capture frequency** (2–30 seconds)
 - **Set data retention** period
 - **Delete all data** with one click
-- **Uninstall** removes the app; delete `~/Library/Application Support/cobrain/` to remove all data
+- **Uninstall** removes the app; delete `~/Library/Application Support/cobrain/` to remove all data (database and screenshots)
 
 ---
 
