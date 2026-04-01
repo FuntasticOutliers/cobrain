@@ -272,6 +272,15 @@ struct HomeView: View {
                 Image(systemName: "brain")
                     .font(.system(size: 10))
                     .foregroundStyle(.green)
+                Button {
+                    ModelManager.shared.unloadModel()
+                } label: {
+                    Image(systemName: "stop.circle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Stop model to free memory")
             }
         case .inferring(let progress):
             HStack(spacing: DS.Spacing.xs) {

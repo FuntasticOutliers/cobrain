@@ -95,12 +95,22 @@ struct SettingsView: View {
                                 .foregroundStyle(DS.Colors.textSecondary)
                         }
 
-                        if ModelManager.shared.pendingCount > 0,
-                           ModelManager.shared.status == .idle || ModelManager.shared.status == .ready {
-                            Button("Process Queue") {
-                                Task { await BatchInferenceCoordinator.shared.flushNow() }
+                        HStack(spacing: DS.Spacing.md) {
+                            if ModelManager.shared.pendingCount > 0,
+                               ModelManager.shared.status == .idle || ModelManager.shared.status == .ready {
+                                Button("Process Queue") {
+                                    Task { await BatchInferenceCoordinator.shared.flushNow() }
+                                }
+                                .font(DS.Fonts.body)
                             }
-                            .font(DS.Fonts.body)
+
+                            if ModelManager.shared.isReady || ModelManager.shared.status == .loading {
+                                Button("Stop Model") {
+                                    ModelManager.shared.unloadModel()
+                                }
+                                .font(DS.Fonts.body)
+                                .foregroundStyle(DS.Colors.error)
+                            }
                         }
                     }
                 }
