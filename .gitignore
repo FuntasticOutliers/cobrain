@@ -1,0 +1,25 @@
+# Tuist-generated Xcode project
+cobrain.xcodeproj/
+cobrain.xcworkspace/
+Derived/
+
+# SPM / Tuist dependency checkouts
+Tuist/.build/
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcscmblueprint
+
+# Build artifacts
+.build/
+build/
+*.app
+*.dmg
+*.xcarchive
+
+# macOS
+.DS_Store
+
+# Sparkle signing key
+Sparkle/private-key
