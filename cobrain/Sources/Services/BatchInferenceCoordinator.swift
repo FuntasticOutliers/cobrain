@@ -18,7 +18,7 @@ final class BatchInferenceCoordinator {
         guard timer == nil else { return }
         log.info("Starting batch inference coordinator (\(Int(self.batchInterval))s interval)")
 
-        timer = Task { [weak self] in
+        timer = Task(priority: .background) { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(self?.batchInterval ?? 300))
                 guard !Task.isCancelled else { break }
