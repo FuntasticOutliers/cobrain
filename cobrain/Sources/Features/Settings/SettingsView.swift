@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var dbSize: String = "..."
     @State private var totalFragments: Int = 0
     @State private var showDeleteConfirmation = false
+    @State private var showingAppPicker = false
+    @State private var appSearchText = ""
 
     var body: some View {
         ScrollView {
@@ -112,6 +114,24 @@ struct SettingsView: View {
                                 .buttonStyle(.plain)
                             }
                             .padding(.vertical, DS.Spacing.xs)
+                        }
+
+                        Button {
+                            appSearchText = ""
+                            showingAppPicker = true
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11))
+                                Text("Add App…")
+                                    .font(DS.Fonts.body)
+                            }
+                            .foregroundStyle(DS.Colors.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, DS.Spacing.xs)
+                        .sheet(isPresented: $showingAppPicker) {
+                            AppPickerSheet(settings: settings, searchText: $appSearchText, availableApps: availableApps)
                         }
                     }
                 }
@@ -269,10 +289,121 @@ struct SettingsView: View {
         totalFragments = (try? StorageManager.shared.totalFragmentCount()) ?? 0
     }
 
+    private var availableApps: [NSRunningApplication] {
+        let selfBundleID = Bundle.main.bundleIdentifier ?? ""
+        let excluded = Set(settings.excludedBundleIDs)
+        let search = appSearchText.lowercased()
+
+        return NSWorkspace.shared.runningApplications
+            .filter { app in
+                guard app.activationPolicy == .regular,
+                      let id = app.bundleIdentifier,
+                      id != selfBundleID,
+                      !excluded.contains(id) else { return false }
+                if search.isEmpty { return true }
+                let name = (app.localizedName ?? id).lowercased()
+                return name.contains(search)
+            }
+            .sorted { ($0.localizedName ?? "") < ($1.localizedName ?? "") }
+    }
+
     private func displayName(for bundleID: String) -> String {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             return FileManager.default.displayName(atPath: url.path)
         }
         return bundleID
+    }
+}
+
+private struct AppPickerSheet: View {
+    let settings: AppSettings
+    @Binding var searchText: String
+    let availableApps: [NSRunningApplication]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Exclude an App")
+                    .font(DS.Fonts.title)
+                    .foregroundStyle(DS.Colors.text)
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(DS.Spacing.lg)
+
+            // Search field
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(DS.Colors.textSecondary)
+                TextField("Filter apps…", text: $searchText)
+                    .font(DS.Fonts.body)
+                    .textFieldStyle(.plain)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                    .fill(DS.Colors.bg)
+            )
+            .padding(.horizontal, DS.Spacing.lg)
+
+            Divider()
+                .padding(.top, DS.Spacing.md)
+
+            // App list
+            if availableApps.isEmpty {
+                Spacer()
+                Text("No apps found")
+                    .font(DS.Fonts.bodySmall)
+                    .foregroundStyle(DS.Colors.textSecondary)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(availableApps, id: \.bundleIdentifier) { app in
+                            Button {
+                                if let id = app.bundleIdentifier {
+                                    settings.exclude(id)
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack(spacing: DS.Spacing.md) {
+                                    if let icon = app.icon {
+                                        Image(nsImage: icon)
+                                            .resizable()
+                                            .frame(width: 24, height: 24)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(app.localizedName ?? "Unknown")
+                                            .font(DS.Fonts.body)
+                                            .foregroundStyle(DS.Colors.text)
+                                        Text(app.bundleIdentifier ?? "")
+                                            .font(DS.Fonts.caption)
+                                            .foregroundStyle(DS.Colors.textSecondary)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, DS.Spacing.lg)
+                                .padding(.vertical, DS.Spacing.sm)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: 380, height: 420)
+        .background(DS.Colors.surface)
     }
 }
