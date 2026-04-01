@@ -71,6 +71,7 @@ final class ModelManager {
         case downloading(Double)
         case loading
         case ready
+        case inferring
         case error(String)
     }
 
@@ -80,7 +81,20 @@ final class ModelManager {
 
     private let inference = InferenceRunner()
 
-    var isReady: Bool { status == .ready }
+    var isReady: Bool { status == .ready || status == .inferring }
+
+    /// Ensures the model is loaded and ready. Loads on demand if idle.
+    func ensureReady() async {
+        switch status {
+        case .ready, .inferring:
+            return
+        case .downloading, .loading:
+            await waitUntilLoaded()
+            return
+        case .idle, .error:
+            await loadModel()
+        }
+    }
 
     func loadModel() async {
         guard status == .idle || {
@@ -114,11 +128,17 @@ final class ModelManager {
     }
 
     func reloadModel() async {
+        unloadModel()
+        await inference.resetSession()
+        await loadModel()
+    }
+
+    /// Unload the model to free memory.
+    func unloadModel() {
         container = nil
         loadedModelID = nil
         status = .idle
-        await inference.resetSession()
-        await loadModel()
+        log.info("Model unloaded")
     }
 
     /// Describe a screenshot using the VLM. Runs inference off the main thread.
@@ -129,6 +149,8 @@ final class ModelManager {
         url: String?
     ) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
+        status = .inferring
+        defer { if status == .inferring { status = .ready } }
         return try await inference.describe(
             container: container,
             image: image,
@@ -141,6 +163,8 @@ final class ModelManager {
     /// Generate a single text completion. Runs inference off the main thread.
     func complete(system: String, user: String, maxTokens: Int = 256) async throws -> String {
         guard let container else { throw ModelError.notLoaded }
+        status = .inferring
+        defer { if status == .inferring { status = .ready } }
         return try await inference.complete(
             container: container,
             system: system,
@@ -152,6 +176,7 @@ final class ModelManager {
     /// Stream a text response. Used for chat.
     func stream(system: String, user: String, maxTokens: Int = 512) throws -> AsyncThrowingStream<String, Error> {
         guard let container else { throw ModelError.notLoaded }
+        status = .inferring
 
         let session = ChatSession(
             container,
@@ -159,6 +184,24 @@ final class ModelManager {
             generateParameters: GenerateParameters(maxTokens: maxTokens, temperature: 0.7)
         )
         return session.streamResponse(to: user)
+    }
+
+    /// Called when streaming completes to transition back from .inferring.
+    func streamDidFinish() {
+        if status == .inferring { status = .ready }
+    }
+
+    /// Wait for an in-progress load to complete.
+    private func waitUntilLoaded() async {
+        // Poll briefly — the load is already running on another task
+        for _ in 0..<600 { // up to ~60 seconds
+            try? await Task.sleep(for: .milliseconds(100))
+            switch status {
+            case .ready, .inferring: return
+            case .error, .idle: return
+            case .downloading, .loading: continue
+            }
+        }
     }
 
     enum ModelError: Error, LocalizedError {

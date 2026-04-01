@@ -6,15 +6,11 @@ private let log = Logger(subsystem: "dev.cobrain.app", category: "summary")
 final class SummaryService: Sendable {
     static let shared = SummaryService()
 
-    // Use an actor to protect mutable state instead of @MainActor
     private let state = SummaryState()
 
     private actor SummaryState {
-        var task: Task<Void, Never>?
         var isRunning = false
 
-        func setTask(_ t: Task<Void, Never>?) { task = t }
-        func getTask() -> Task<Void, Never>? { task }
         func startRunning() -> Bool {
             guard !isRunning else { return false }
             isRunning = true
@@ -23,35 +19,11 @@ final class SummaryService: Sendable {
         func stopRunning() { isRunning = false }
     }
 
-    func start() {
-        Task {
-            guard await state.getTask() == nil else { return }
-            log.info("Starting summary service (120s interval)")
-
-            let t = Task.detached { [weak self] in
-                try? await Task.sleep(for: .seconds(10))
-
-                while !Task.isCancelled {
-                    await self?.processUnsummarized()
-                    try? await Task.sleep(for: .seconds(120))
-                }
-            }
-            await state.setTask(t)
-        }
-    }
-
-    func stop() {
-        Task {
-            await state.getTask()?.cancel()
-            await state.setTask(nil)
-        }
-    }
-
-    private func processUnsummarized() async {
+    /// Called by BatchInferenceCoordinator while the model is already loaded.
+    /// Processes unsummarized fragments in the current batch window.
+    func processIfNeeded() async {
         guard await state.startRunning() else { return }
         defer { Task { await state.stopRunning() } }
-
-        guard await ModelManager.shared.isReady else { return }
 
         do {
             let fragments = try StorageManager.shared.unsummarizedFragments(limit: 20)
@@ -61,8 +33,6 @@ final class SummaryService: Sendable {
 
             // Process summaries concurrently in batches of 4
             for batch in fragments.chunked(into: 4) {
-                guard !Task.isCancelled else { break }
-
                 await withTaskGroup(of: Void.self) { group in
                     for fragment in batch {
                         group.addTask {

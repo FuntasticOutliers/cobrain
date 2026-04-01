@@ -18,8 +18,7 @@ struct CobrainApp: App {
                 .onAppear {
                     if settings.hasCompletedOnboarding {
                         CaptureScheduler.shared.start()
-                        SummaryService.shared.start()
-                        Task { await ModelManager.shared.loadModel() }
+                        BatchInferenceCoordinator.shared.start()
                     }
                 }
         }

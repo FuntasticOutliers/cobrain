@@ -113,9 +113,6 @@ struct HomeView: View {
             .frame(maxWidth: 480)
             .padding(.bottom, DS.Spacing.lg)
 
-            // Model status
-            modelStatusPill
-
             // Source chips
             if !appSummaries.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -172,7 +169,7 @@ struct HomeView: View {
 
     private var bottomBar: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // Status
+            // Capture status
             Circle()
                 .fill(settings.captureEnabled ? Color.green : Color.gray)
                 .frame(width: 6, height: 6)
@@ -187,6 +184,9 @@ struct HomeView: View {
             Text("\(totalCount) fragments")
                 .font(.system(size: 11))
                 .foregroundStyle(DS.Colors.textSecondary)
+
+            // Model status
+            modelStatusBar
 
             Spacer()
 
@@ -223,70 +223,74 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Model Status Pill
+    // MARK: - Model Status (Bottom Bar)
 
     @ViewBuilder
-    private var modelStatusPill: some View {
+    private var modelStatusBar: some View {
         let status = ModelManager.shared.status
         switch status {
         case .idle:
             EmptyView()
         case .downloading(let progress):
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text("·")
+                    .foregroundStyle(DS.Colors.textSecondary)
                 ProgressView(value: progress)
-                    .frame(width: 60)
+                    .frame(width: 40)
                     .tint(DS.Colors.accent)
-                Text("Downloading model \(Int(progress * 100))%")
+                Text("\(Int(progress * 100))%")
                     .font(.system(size: 11))
                     .foregroundStyle(DS.Colors.textSecondary)
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(DS.Colors.surface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(DS.Colors.border, lineWidth: 0.5)
-            )
-            .padding(.bottom, DS.Spacing.md)
         case .loading:
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xs) {
+                Text("·")
+                    .foregroundStyle(DS.Colors.textSecondary)
                 ProgressView()
-                    .scaleEffect(0.6)
-                Text("Loading model...")
+                    .scaleEffect(0.5)
+                    .frame(width: 10, height: 10)
+                Text("Loading model…")
                     .font(.system(size: 11))
                     .foregroundStyle(DS.Colors.textSecondary)
             }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(DS.Colors.surface)
-            )
-            .padding(.bottom, DS.Spacing.md)
         case .ready:
             HStack(spacing: DS.Spacing.xs) {
-                Circle()
-                    .fill(Color.green)
-                    .frame(width: 5, height: 5)
-                Text("Model ready")
+                Text("·")
+                    .foregroundStyle(DS.Colors.textSecondary)
+                Image(systemName: "brain")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.green)
+            }
+        case .inferring:
+            HStack(spacing: DS.Spacing.xs) {
+                Text("·")
+                    .foregroundStyle(DS.Colors.textSecondary)
+                Image(systemName: "brain")
+                    .font(.system(size: 10))
+                    .foregroundStyle(DS.Colors.accent)
+                    .symbolEffect(.pulse)
+                Text("Thinking…")
                     .font(.system(size: 11))
                     .foregroundStyle(DS.Colors.textSecondary)
             }
-            .padding(.bottom, DS.Spacing.md)
-        case .error(let msg):
+        case .error:
             HStack(spacing: DS.Spacing.xs) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(DS.Colors.error)
-                Text(msg)
-                    .font(.system(size: 11))
-                    .foregroundStyle(DS.Colors.error)
-                    .lineLimit(1)
+                Text("·")
+                    .foregroundStyle(DS.Colors.textSecondary)
+                Button {
+                    Task { await ModelManager.shared.reloadModel() }
+                } label: {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(DS.Colors.error)
+                        Text("Model error")
+                            .font(.system(size: 11))
+                            .foregroundStyle(DS.Colors.error)
+                    }
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.bottom, DS.Spacing.md)
         }
     }
 

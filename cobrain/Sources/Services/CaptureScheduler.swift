@@ -15,7 +15,6 @@ final class CaptureScheduler {
     private let windowMetadata = WindowMetadataService.shared
     private let contextService = ContextDetectionService.shared
     private let changeDetection = ChangeDetectionService.shared
-    private let dedup = DeduplicationService.shared
     private let storage = StorageManager.shared
     private let settings = AppSettings.shared
 
@@ -140,64 +139,25 @@ final class CaptureScheduler {
         previousImage = image
         resetInterval()
 
-        // Downsample for VLM (don't waste inference on Retina pixels)
-        let vlmImage = ScreenCaptureService.downsampleForVLM(image) ?? image
-
-        // Describe the screenshot with VLM
-        let description: String
-        do {
-            guard await ModelManager.shared.isReady else {
-                log.debug("Model not ready, skipping capture")
-                return
-            }
-            description = try await ModelManager.shared.describe(
-                image: vlmImage,
-                appName: context.appName,
-                windowTitle: meta.windowTitle,
-                url: meta.browserURL
-            )
-            guard !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                log.debug("Empty description from VLM for \(context.appName, privacy: .public)")
-                return
-            }
-        } catch {
-            log.error("VLM error for \(context.appName, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return
-        }
-
-        // Dedup (secondary filter — catches semantically identical descriptions)
-        let dedupResult = dedup.check(
-            content: description,
-            bundleID: context.bundleIdentifier,
-            windowTitle: meta.windowTitle
-        )
-        guard case .newFragment = dedupResult else {
-            log.debug("Duplicate description, skipping")
-            return
-        }
-
         // Save screenshot to disk
         let now = Int(Date().timeIntervalSince1970)
         let day = Fragment.makeDay()
-        let savedImagePath = storage.saveScreenshot(image, day: day, timestamp: now)
+        guard let savedImagePath = storage.saveScreenshot(image, day: day, timestamp: now) else {
+            log.error("Failed to save screenshot for \(context.appName, privacy: .public)")
+            return
+        }
 
-        // Save fragment with image reference
-        let hash = DeduplicationService.hash(description)
-        let fragmentId = storage.saveFragment(
-            content: description,
-            contentHash: hash,
-            focusedText: nil,
+        // Queue for batch inference (VLM runs later)
+        storage.savePendingCapture(
+            imagePath: savedImagePath,
             bundleIdentifier: context.bundleIdentifier,
             appName: context.appName,
             windowTitle: meta.windowTitle,
             url: meta.browserURL,
-            appCategory: context.category.rawValue,
-            summary: description,
-            imagePath: savedImagePath
+            appCategory: context.category.rawValue
         )
 
-        let wordCount = description.split(separator: " ").count
-        log.info("Saved fragment #\(fragmentId ?? -1, privacy: .public) from \(context.appName, privacy: .public) — \(wordCount, privacy: .public) words, window: \(meta.windowTitle ?? "nil", privacy: .public)")
+        log.info("Queued pending capture from \(context.appName, privacy: .public), window: \(meta.windowTitle ?? "nil", privacy: .public)")
     }
 
     // MARK: - System Events

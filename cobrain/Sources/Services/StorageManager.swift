@@ -71,6 +71,21 @@ final class StorageManager: @unchecked Sendable {
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_fragments_bundle ON fragments(bundleIdentifier)")
             try db.execute(sql: "CREATE INDEX IF NOT EXISTS idx_fragments_category ON fragments(appCategory)")
 
+            // Pending captures queue (batch inference)
+            try db.execute(sql: """
+                CREATE TABLE IF NOT EXISTS pending_captures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    imagePath TEXT NOT NULL,
+                    bundleIdentifier TEXT NOT NULL,
+                    appName TEXT NOT NULL,
+                    windowTitle TEXT,
+                    url TEXT,
+                    appCategory TEXT,
+                    capturedAt INTEGER NOT NULL,
+                    day TEXT NOT NULL
+                )
+                """)
+
             // FTS5 virtual table
             try db.execute(sql: """
                 CREATE VIRTUAL TABLE IF NOT EXISTS fragments_fts USING fts5(
@@ -320,6 +335,61 @@ final class StorageManager: @unchecked Sendable {
                 WHERE appName LIKE ? COLLATE NOCASE
                 ORDER BY capturedAt DESC LIMIT ?
                 """, arguments: ["%\(name)%", limit])
+        }
+    }
+
+    // MARK: - Pending Captures
+
+    @discardableResult
+    func savePendingCapture(
+        imagePath: String,
+        bundleIdentifier: String,
+        appName: String,
+        windowTitle: String?,
+        url: String?,
+        appCategory: String?
+    ) -> Int64? {
+        var pending = PendingCapture(
+            id: nil,
+            imagePath: imagePath,
+            bundleIdentifier: bundleIdentifier,
+            appName: appName,
+            windowTitle: windowTitle,
+            url: url,
+            appCategory: appCategory,
+            capturedAt: Int(Date().timeIntervalSince1970),
+            day: Fragment.makeDay()
+        )
+
+        do {
+            try dbPool.write { db in
+                try pending.insert(db)
+            }
+            return pending.id
+        } catch {
+            log.error("Save pending capture error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func fetchPendingCaptures(limit: Int = 50) throws -> [PendingCapture] {
+        try dbPool.read { db in
+            try PendingCapture
+                .order(PendingCapture.Columns.capturedAt.asc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    func deletePendingCapture(id: Int64) throws {
+        try dbPool.write { db in
+            try db.execute(sql: "DELETE FROM pending_captures WHERE id = ?", arguments: [id])
+        }
+    }
+
+    func pendingCaptureCount() throws -> Int {
+        try dbPool.read { db in
+            try PendingCapture.fetchCount(db)
         }
     }
 

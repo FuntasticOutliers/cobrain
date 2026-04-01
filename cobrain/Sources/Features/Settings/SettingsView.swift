@@ -238,6 +238,10 @@ struct SettingsView: View {
             Text("Ready")
                 .font(DS.Fonts.mono)
                 .foregroundStyle(DS.Colors.success)
+        case .inferring:
+            Text("Inferring…")
+                .font(DS.Fonts.mono)
+                .foregroundStyle(DS.Colors.accent)
         case .error(let msg):
             Text(msg)
                 .font(DS.Fonts.mono)

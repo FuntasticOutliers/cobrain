@@ -15,9 +15,7 @@ final class ChatViewModel {
     private let storage = StorageManager.shared
 
     func ensureModelLoaded() async {
-        if !ModelManager.shared.isReady {
-            await ModelManager.shared.loadModel()
-        }
+        await ModelManager.shared.ensureReady()
     }
 
     func send(_ text: String) async {
@@ -68,11 +66,13 @@ final class ChatViewModel {
                 response += chunk
                 messages[msgIndex] = ChatMessage(role: .assistant, content: response)
             }
+            ModelManager.shared.streamDidFinish()
 
             let trimmed = response.trimmingCharacters(in: .whitespacesAndNewlines)
             messages[msgIndex] = ChatMessage(role: .assistant, content: trimmed.isEmpty ? "I couldn't generate a response." : trimmed)
             log.info("Chat response: \(trimmed.prefix(200), privacy: .public)")
         } catch {
+            ModelManager.shared.streamDidFinish()
             log.error("Chat generation error: \(error.localizedDescription, privacy: .public)")
             messages.append(ChatMessage(role: .assistant, content: "Error: \(error.localizedDescription)"))
         }
