@@ -14,8 +14,8 @@ let project = Project(
                 "CFBundleShortVersionString": "0.1.1",
                 "CFBundleVersion": "1",
                 "NSScreenCaptureUsageDescription": "Cobrain captures a screenshot of your active window to understand what you're working on and to enable replay. Screenshots are stored locally on your Mac.",
-                "SUFeedURL": "https://weareoutliers.github.io/cobrain/appcast.xml",
-                "SUPublicEDKey": "",
+                "SUFeedURL": "https://funtasticoutliers.github.io/cobrain/appcast.xml",
+                "SUPublicEDKey": "V1IFzbErC5hda9ZUEQKuK4ysF9sEwKmMPCSZV2MeKo0=",
             ]),
             buildableFolders: [
                 "cobrain/Sources",

@@ -8,7 +8,7 @@
             <sparkle:version>1</sparkle:version>
             <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/FuntasticOutliers/cobrain/releases/download/v0.1.1/cobrain.dmg" length="16039209" type="application/octet-stream"/>
+            <enclosure url="https://github.com/FuntasticOutliers/cobrain/releases/download/v0.1.1/cobrain.dmg" length="16049972" type="application/octet-stream" sparkle:edSignature="lpVSoRGEXlEfCcV34UeBIWbCz6EuC1Rcw1E/jABZA/bfjeux0gIk7PILarbe1vLeJhHRVE1J5JkmVTkcvtNRAQ=="/>
         </item>
     </channel>
 </rss>
