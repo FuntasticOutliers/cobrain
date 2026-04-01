@@ -216,13 +216,11 @@ enum TimeBlock: String, CaseIterable, Hashable {
 
 struct TimelineRow: View {
     let fragment: Fragment
-    @State private var expanded = false
+    @State private var showDetail = false
 
     var body: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                expanded.toggle()
-            }
+            showDetail = true
         } label: {
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 // Time + dot
@@ -235,12 +233,10 @@ struct TimelineRow: View {
                         .fill(appColor)
                         .frame(width: 6, height: 6)
 
-                    if !expanded {
-                        Rectangle()
-                            .fill(DS.Colors.border)
-                            .frame(width: 1)
-                            .frame(maxHeight: .infinity)
-                    }
+                    Rectangle()
+                        .fill(DS.Colors.border)
+                        .frame(width: 1)
+                        .frame(maxHeight: .infinity)
                 }
                 .frame(width: 44)
 
@@ -269,35 +265,7 @@ struct TimelineRow: View {
                         Text(summary)
                             .font(DS.Fonts.bodySmall)
                             .foregroundStyle(DS.Colors.text)
-                            .lineLimit(expanded ? nil : 2)
-
-                        if expanded {
-                            if let imgPath = fragment.imagePath {
-                                let imgURL = StorageManager.screenshotURL(for: imgPath)
-                                AsyncImageView(url: imgURL)
-                                    .frame(maxWidth: 320, maxHeight: 200)
-                                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm))
-                                    .padding(.vertical, DS.Spacing.xs)
-                            }
-
-                            if let url = fragment.url, !url.isEmpty {
-                                HStack(spacing: DS.Spacing.xxs) {
-                                    Image(systemName: "link")
-                                        .font(.system(size: 9))
-                                    Text(url)
-                                        .font(.system(size: 10))
-                                        .lineLimit(1)
-                                }
-                                .foregroundStyle(DS.Colors.accent)
-                            }
-
-                            if let url = fragment.url, let u = URL(string: url) {
-                                Button("Open URL") { NSWorkspace.shared.open(u) }
-                                    .font(DS.Fonts.caption)
-                                    .foregroundStyle(DS.Colors.accent)
-                                    .padding(.top, DS.Spacing.xxs)
-                            }
-                        }
+                            .lineLimit(2)
                     } else {
                         HStack(spacing: DS.Spacing.xs) {
                             ProgressView()
@@ -310,24 +278,172 @@ struct TimelineRow: View {
                 }
                 .padding(DS.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .fill(expanded ? DS.Colors.surface : Color.clear)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md)
-                        .stroke(expanded ? DS.Colors.border : Color.clear, lineWidth: 0.5)
-                )
             }
         }
         .buttonStyle(.plain)
         .padding(.vertical, DS.Spacing.xxs)
+        .sheet(isPresented: $showDetail) {
+            FragmentDetailView(fragment: fragment)
+        }
     }
 
     private var timeString: String {
         let date = Date(timeIntervalSince1970: TimeInterval(fragment.capturedAt))
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
+        return formatter.string(from: date)
+    }
+
+    private var appColor: Color {
+        let cat = AppCategory.from(bundleID: fragment.bundleIdentifier)
+        switch cat {
+        case .code: return .blue
+        case .browsing: return .orange
+        case .communication: return .green
+        case .email: return .purple
+        case .work: return .indigo
+        case .design: return .pink
+        case .other: return .gray
+        }
+    }
+}
+
+// MARK: - Fragment Detail Modal
+
+struct FragmentDetailView: View {
+    let fragment: Fragment
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                HStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: fragment.appIcon)
+                        .font(.system(size: 12))
+                        .foregroundStyle(appColor)
+                    Text(fragment.appName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(DS.Colors.text)
+                }
+
+                Spacer()
+
+                Text(formattedTime)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(DS.Colors.textSecondary)
+
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(DS.Spacing.lg)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                    // Screenshot
+                    if let imgPath = fragment.imagePath {
+                        let imgURL = StorageManager.screenshotURL(for: imgPath)
+                        AsyncImageView(url: imgURL)
+                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                    }
+
+                    // Window title
+                    if let title = fragment.windowTitle, !title.isEmpty {
+                        detailSection("Window") {
+                            Text(title)
+                                .font(DS.Fonts.body)
+                                .foregroundStyle(DS.Colors.text)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    // URL
+                    if let url = fragment.url, !url.isEmpty {
+                        detailSection("URL") {
+                            HStack(spacing: DS.Spacing.xs) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 10))
+                                Text(url)
+                                    .font(DS.Fonts.bodySmall)
+                                    .lineLimit(2)
+                                    .textSelection(.enabled)
+                            }
+                            .foregroundStyle(DS.Colors.accent)
+                            .onTapGesture {
+                                if let u = URL(string: url) {
+                                    NSWorkspace.shared.open(u)
+                                }
+                            }
+                        }
+                    }
+
+                    // Summary (only if different from description)
+                    if let summary = fragment.summary, summary != fragment.content {
+                        detailSection("Summary") {
+                            Text(summary)
+                                .font(DS.Fonts.body)
+                                .foregroundStyle(DS.Colors.text)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    // Full VLM description
+                    detailSection("Description") {
+                        Text(fragment.content)
+                            .font(DS.Fonts.body)
+                            .foregroundStyle(DS.Colors.text)
+                            .textSelection(.enabled)
+                    }
+
+                    // Metadata
+                    detailSection("Metadata") {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            metadataRow("Bundle ID", fragment.bundleIdentifier)
+                            metadataRow("Category", fragment.appCategory ?? "unknown")
+                            metadataRow("Words", "\(fragment.wordCount)")
+                        }
+                    }
+                }
+                .padding(DS.Spacing.lg)
+            }
+        }
+        .frame(minWidth: 600, idealWidth: 720, minHeight: 500, idealHeight: 720)
+        .background(DS.Colors.bg)
+    }
+
+    private func detailSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(DS.Colors.textSecondary.opacity(0.7))
+                .tracking(0.5)
+            content()
+        }
+    }
+
+    private func metadataRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(DS.Colors.textSecondary)
+                .frame(width: 70, alignment: .leading)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(DS.Colors.text)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var formattedTime: String {
+        let date = Date(timeIntervalSince1970: TimeInterval(fragment.capturedAt))
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm:ss a"
         return formatter.string(from: date)
     }
 
