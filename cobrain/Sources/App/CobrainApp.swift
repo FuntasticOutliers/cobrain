@@ -20,6 +20,13 @@ struct CobrainApp: App {
                         CaptureScheduler.shared.start()
                         BatchInferenceCoordinator.shared.start()
                         ModelManager.shared.refreshPendingCount()
+                        DispatchQueue.global(qos: .utility).async {
+                            StorageManager.shared.applyStoragePolicy(
+                                screenshotDays: settings.screenshotRetentionDays,
+                                textDays: settings.textRetentionDays,
+                                maxScreenshotMB: settings.maxScreenshotSizeMB
+                            )
+                        }
                     }
                 }
         }

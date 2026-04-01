@@ -90,8 +90,17 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(captureIntervalSeconds, forKey: "captureIntervalSeconds") }
     }
 
-    var retentionDays: Int {
-        didSet { UserDefaults.standard.set(retentionDays, forKey: "retentionDays") }
+    var screenshotRetentionDays: Int {
+        didSet { UserDefaults.standard.set(screenshotRetentionDays, forKey: "screenshotRetentionDays") }
+    }
+
+    var textRetentionDays: Int {
+        didSet { UserDefaults.standard.set(textRetentionDays, forKey: "textRetentionDays") }
+    }
+
+    /// Maximum disk space for screenshots in megabytes. 0 = unlimited.
+    var maxScreenshotSizeMB: Int {
+        didSet { UserDefaults.standard.set(maxScreenshotSizeMB, forKey: "maxScreenshotSizeMB") }
     }
 
     var theme: AppTheme {
@@ -124,8 +133,14 @@ final class AppSettings {
         ]
         let interval = UserDefaults.standard.integer(forKey: "captureIntervalSeconds")
         self.captureIntervalSeconds = interval > 0 ? interval : 5
-        let retention = UserDefaults.standard.integer(forKey: "retentionDays")
-        self.retentionDays = retention > 0 ? retention : 90
+        // Migrate old single retentionDays to new split settings
+        let legacyRetention = UserDefaults.standard.integer(forKey: "retentionDays")
+        let ssRetention = UserDefaults.standard.integer(forKey: "screenshotRetentionDays")
+        self.screenshotRetentionDays = ssRetention > 0 ? ssRetention : (legacyRetention > 0 ? legacyRetention : 90)
+        let txtRetention = UserDefaults.standard.integer(forKey: "textRetentionDays")
+        self.textRetentionDays = txtRetention > 0 ? txtRetention : (legacyRetention > 0 ? legacyRetention : 365)
+        let maxSS = UserDefaults.standard.integer(forKey: "maxScreenshotSizeMB")
+        self.maxScreenshotSizeMB = maxSS > 0 ? maxSS : 5120
         self.theme = AppTheme(rawValue: UserDefaults.standard.string(forKey: "theme") ?? "") ?? .light
         self.modelID = UserDefaults.standard.string(forKey: "modelID")
             ?? SupportedModel.qwen3VL4B.rawValue

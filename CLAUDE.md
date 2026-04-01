@@ -2,11 +2,11 @@
 
 ## Build & Run (Development)
 
-After making any code change, build and restart:
+After making any code change, always build and run:
 
 1. Kill the running app: `pkill -x cobrain`
 2. Build: `xcodebuild -workspace cobrain.xcworkspace -scheme cobrain -configuration Debug build`
-3. Launch: `open $(xcodebuild -workspace cobrain.xcworkspace -scheme cobrain -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/cobrain.app`
+3. Launch (always do this after build): `open $(xcodebuild -workspace cobrain.xcworkspace -scheme cobrain -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/cobrain.app`
 
 ## Project Setup
 

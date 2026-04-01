@@ -179,6 +179,56 @@ final class StorageManager: @unchecked Sendable {
         }
     }
 
+    /// Delete oldest screenshot day-folders until total size is under the given limit.
+    func purgeScreenshots(untilUnderMB limitMB: Int) {
+        guard limitMB > 0 else { return }
+        let limitBytes = Int64(limitMB) * 1024 * 1024
+        var currentSize = screenshotsSizeBytes()
+        guard currentSize > limitBytes else { return }
+
+        let fm = FileManager.default
+        guard let dayDirs = (try? fm.contentsOfDirectory(at: Self.screenshotsDir, includingPropertiesForKeys: nil))?
+            .sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) else { return }
+
+        for dir in dayDirs {
+            guard currentSize > limitBytes else { break }
+            let dirSize = Self.directorySize(dir)
+            try? fm.removeItem(at: dir)
+            currentSize -= dirSize
+            log.info("Purged screenshots for \(dir.lastPathComponent) to reclaim \(dirSize) bytes")
+        }
+    }
+
+    /// Total size of all screenshots on disk in bytes.
+    func screenshotsSizeBytes() -> Int64 {
+        Self.directorySize(Self.screenshotsDir)
+    }
+
+    /// Total number of screenshot files on disk.
+    func screenshotsCount() -> Int {
+        let fm = FileManager.default
+        guard let dayDirs = try? fm.contentsOfDirectory(at: Self.screenshotsDir, includingPropertiesForKeys: nil) else { return 0 }
+        var count = 0
+        for dir in dayDirs {
+            if let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+                count += files.count
+            }
+        }
+        return count
+    }
+
+    private static func directorySize(_ url: URL) -> Int64 {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles]) else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+
     @discardableResult
     func saveFragment(
         content: String,
@@ -425,6 +475,50 @@ final class StorageManager: @unchecked Sendable {
             return db.changesCount
         }
         purgeScreenshots(olderThan: days)
+        return count
+    }
+
+    /// Purge text fragments older than the given number of days.
+    @discardableResult
+    func purgeText(olderThan days: Int) throws -> Int {
+        try dbPool.write { db in
+            let cutoff = Int(Date().timeIntervalSince1970) - (days * 86400)
+            try db.execute(sql: "DELETE FROM fragments WHERE capturedAt < ?", arguments: [cutoff])
+            return db.changesCount
+        }
+    }
+
+    /// Run the full storage policy: time-based + size-based cleanup.
+    func applyStoragePolicy(screenshotDays: Int, textDays: Int, maxScreenshotMB: Int) {
+        // 1. Delete screenshots older than screenshotDays
+        purgeScreenshots(olderThan: screenshotDays)
+        // 2. If still over size limit, delete oldest days until under
+        purgeScreenshots(untilUnderMB: maxScreenshotMB)
+        // 3. Delete text fragments older than textDays
+        try? purgeText(olderThan: textDays)
+    }
+
+    /// Delete all screenshots from disk (keeps text fragments).
+    func deleteAllScreenshots() {
+        let fm = FileManager.default
+        guard let dayDirs = try? fm.contentsOfDirectory(at: Self.screenshotsDir, includingPropertiesForKeys: nil) else { return }
+        for dir in dayDirs {
+            try? fm.removeItem(at: dir)
+        }
+        // Clear imagePath references in DB
+        try? dbPool.write { db in
+            try db.execute(sql: "UPDATE fragments SET imagePath = NULL")
+        }
+        log.info("Deleted all screenshots")
+    }
+
+    /// Delete all text fragments from DB (keeps screenshot files).
+    func deleteAllText() throws -> Int {
+        let count = try dbPool.write { db in
+            try db.execute(sql: "DELETE FROM fragments")
+            return db.changesCount
+        }
+        log.info("Deleted all text fragments (\(count) rows)")
         return count
     }
 
