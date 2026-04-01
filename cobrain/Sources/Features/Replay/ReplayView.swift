@@ -9,10 +9,11 @@ struct ReplayView: View {
     @State private var fragments: [Fragment] = []
     @State private var currentIndex: Int = 0
     @State private var isPlaying: Bool = false
-    @State private var playbackSpeed: Double = 1.0
+    @State private var playbackSpeed: Double = 2.0
     @State private var timer: Timer?
+    @State private var isHoveringScreenshot: Bool = false
 
-    private let speeds: [Double] = [0.5, 1, 2, 4]
+    private let speeds: [Double] = [0.5, 1, 2, 4, 8, 16, 20]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,6 +32,9 @@ struct ReplayView: View {
             loadFragments()
         }
         .onDisappear { stopPlayback() }
+        .onKeyPress(.leftArrow) { stepBackward(); return .handled }
+        .onKeyPress(.rightArrow) { stepForward(); return .handled }
+        .onKeyPress(.space) { togglePlayback(); return .handled }
     }
 
     // MARK: - Date Header
@@ -52,9 +56,16 @@ struct ReplayView: View {
                 Text(dayLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(DS.Colors.text)
-                Text("\(fragments.count) screenshots")
-                    .font(DS.Fonts.caption)
-                    .foregroundStyle(DS.Colors.textSecondary)
+
+                if !fragments.isEmpty {
+                    Text(timeRangeLabel)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(DS.Colors.textSecondary)
+                } else {
+                    Text("No screenshots")
+                        .font(DS.Fonts.caption)
+                        .foregroundStyle(DS.Colors.textSecondary)
+                }
             }
 
             Spacer()
@@ -80,7 +91,7 @@ struct ReplayView: View {
 
     private var replayContent: some View {
         VStack(spacing: 0) {
-            // Screenshot display
+            // Main screenshot area with play overlay
             ZStack {
                 DS.Colors.surface
 
@@ -88,6 +99,7 @@ struct ReplayView: View {
                    let path = fragment.imagePath {
                     let url = StorageManager.screenshotURL(for: path)
                     AsyncImageView(url: url)
+                        .transition(.opacity)
                 } else {
                     VStack(spacing: DS.Spacing.md) {
                         Image(systemName: "photo")
@@ -98,11 +110,49 @@ struct ReplayView: View {
                             .foregroundStyle(DS.Colors.textSecondary)
                     }
                 }
+
+                // Play button overlay
+                if !isPlaying {
+                    Circle()
+                        .fill(.black.opacity(isHoveringScreenshot ? 0.5 : 0.3))
+                        .frame(width: 64, height: 64)
+                        .overlay {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.white)
+                                .offset(x: 2)
+                        }
+                        .opacity(isHoveringScreenshot ? 1 : 0.6)
+                        .animation(.easeInOut(duration: 0.15), value: isHoveringScreenshot)
+                        .onTapGesture { startPlayback() }
+                }
+
+                // Speed badge
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(speedLabel(playbackSpeed))
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .padding(.vertical, DS.Spacing.xs)
+                            .background(
+                                RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                    .fill(.black.opacity(0.55))
+                            )
+                    }
+                    .padding(DS.Spacing.md)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
+            .onHover { isHoveringScreenshot = $0 }
+            .onTapGesture {
+                if isPlaying { stopPlayback() }
+            }
 
-            // Metadata overlay
+            // Current fragment info bar
             if let fragment = currentFragment {
                 HStack(spacing: DS.Spacing.md) {
                     Image(systemName: fragment.appIcon)
@@ -133,7 +183,7 @@ struct ReplayView: View {
 
             Divider()
 
-            // Playback controls
+            // Playback controls + thumbnail filmstrip
             playbackControls
         }
     }
@@ -156,8 +206,8 @@ struct ReplayView: View {
             .padding(.top, DS.Spacing.sm)
 
             HStack(spacing: DS.Spacing.lg) {
-                // Frame counter
-                Text("\(currentIndex + 1) / \(fragments.count)")
+                // Frame counter + time
+                Text("\(currentIndex + 1)/\(fragments.count)")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(DS.Colors.textSecondary)
                     .frame(width: 80, alignment: .leading)
@@ -165,10 +215,7 @@ struct ReplayView: View {
                 Spacer()
 
                 // Previous
-                Button {
-                    stopPlayback()
-                    if currentIndex > 0 { currentIndex -= 1 }
-                } label: {
+                Button { stepBackward() } label: {
                     Image(systemName: "backward.frame.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(DS.Colors.text)
@@ -177,9 +224,7 @@ struct ReplayView: View {
                 .disabled(currentIndex == 0)
 
                 // Play / Pause
-                Button {
-                    if isPlaying { stopPlayback() } else { startPlayback() }
-                } label: {
+                Button { togglePlayback() } label: {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(DS.Colors.accent)
@@ -188,10 +233,7 @@ struct ReplayView: View {
                 .buttonStyle(.plain)
 
                 // Next
-                Button {
-                    stopPlayback()
-                    if currentIndex < fragments.count - 1 { currentIndex += 1 }
-                } label: {
+                Button { stepForward() } label: {
                     Image(systemName: "forward.frame.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(DS.Colors.text)
@@ -221,12 +263,17 @@ struct ReplayView: View {
                     }
                 } label: {
                     Text(speedLabel(playbackSpeed))
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(DS.Colors.textSecondary)
-                        .frame(width: 40, alignment: .trailing)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(DS.Colors.accent)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: DS.Radius.sm)
+                                .fill(DS.Colors.accent.opacity(0.12))
+                        )
                 }
                 .menuStyle(.borderlessButton)
-                .frame(width: 50)
+                .frame(width: 60)
             }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.sm)
@@ -253,6 +300,20 @@ struct ReplayView: View {
     }
 
     // MARK: - Playback Logic
+
+    private func togglePlayback() {
+        if isPlaying { stopPlayback() } else { startPlayback() }
+    }
+
+    private func stepForward() {
+        stopPlayback()
+        if currentIndex < fragments.count - 1 { currentIndex += 1 }
+    }
+
+    private func stepBackward() {
+        stopPlayback()
+        if currentIndex > 0 { currentIndex -= 1 }
+    }
 
     private func startPlayback() {
         guard !fragments.isEmpty else { return }
@@ -281,7 +342,6 @@ struct ReplayView: View {
         let day = Fragment.makeDay(from: selectedDate)
         do {
             let allFragments = try StorageManager.shared.fragmentsForDay(day)
-            // Only include fragments that have a saved screenshot
             fragments = allFragments.filter { $0.imagePath != nil }
             currentIndex = 0
             log.info("Loaded \(fragments.count) screenshots for replay on \(day)")
@@ -304,6 +364,11 @@ struct ReplayView: View {
         return formatter.string(from: selectedDate)
     }
 
+    private var timeRangeLabel: String {
+        guard let first = fragments.first, let last = fragments.last else { return "" }
+        return "\(shortTimeString(for: first)) to \(shortTimeString(for: last))"
+    }
+
     private var isToday: Bool {
         Calendar.current.isDateInToday(selectedDate)
     }
@@ -312,6 +377,13 @@ struct ReplayView: View {
         let date = Date(timeIntervalSince1970: TimeInterval(fragment.capturedAt))
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm:ss a"
+        return formatter.string(from: date)
+    }
+
+    private func shortTimeString(for fragment: Fragment) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(fragment.capturedAt))
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
         return formatter.string(from: date)
     }
 
